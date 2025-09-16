@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://bitcoinbeer.events/sitemap.xml
