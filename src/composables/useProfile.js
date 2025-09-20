@@ -4,7 +4,8 @@ import { ref, computed, onMounted, watch } from 'vue';
 const token = ref(localStorage.getItem('user_token') || '');
 
 export function useProfile() {
-  const API = 'https://api.bitcoinbeer.events/api';
+  const API = 'https://api.bitcoinbeer.events/api'
+  const API_KEY = '0215efb408569f4590cc2108cae33689b4901475a994d2ec5be1e59af0fc231a'
   const profile = ref({});
   const comments = ref([]);
   const defaultAvatar = '/assets/default-avatar.png';
@@ -63,7 +64,7 @@ export function useProfile() {
 
   async function loadGamification(email) {
     try {
-      const url = `${API}/gamification.php?action=profile&email=${encodeURIComponent(email)}&api_key=0215efb408569f4590cc2108cae33689b4901475a994d2ec5be1e59af0fc231a`;
+      const url = `${API}/gamification.php?action=profile&email=${encodeURIComponent(email)}&api_key=${API_KEY}`;
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error('gamification fetch failed');
       const data = await res.json();
@@ -94,7 +95,7 @@ export function useProfile() {
       };
       if (gamification.value.rank == null || gamification.value.total == null) {
         try {
-          const lbUrl = `${API}/gamification.php?action=leaderboard&limit=200&api_key=0215efb408569f4590cc2108cae33689b4901475a994d2ec5be1e59af0fc231a`;
+          const lbUrl = `${API}/gamification.php?action=leaderboard&limit=200&api_key=${API_KEY}`;
           const lr = await fetch(lbUrl, { cache: 'no-store' });
           if (lr.ok) {
             const arr = await lr.json();

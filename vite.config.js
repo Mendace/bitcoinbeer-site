@@ -29,11 +29,17 @@ export default defineConfig(({ mode }) => {
       host: true,
       strictPort: true,
       proxy: {
+        // Simple PHP proxy for API calls
+        '/proxy-api.php': {
+          target: 'http://localhost:8080',  // Assuming you have a local PHP server
+          changeOrigin: true,
+          secure: false,
+        },
+        // Generic API proxy as fallback
         '^/web/api/.*': {
           target: BACKEND,
           changeOrigin: true,
-          secure: false,               // metti true solo se il cert è valido
-          // rewrite: (p) => p.replace(/^\/web/, ''),
+          secure: false,
         },
         '^/api/.*': {
           target: BACKEND,

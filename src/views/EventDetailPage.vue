@@ -186,15 +186,17 @@ export default {
 
       // hero
       heroImages: [
-        '/assets/meetup/DSC01623.JPG',
-        '/assets/meetup/DSC01653.JPG',
-        '/assets/meetup/DSC09751.JPG',
-        '/assets/meetup/DSC09788.JPG',
-        '/assets/meetup/DSC09814.JPG',
-        '/assets/meetup/Granatiero.jpg',
-        '/assets/meetup/Guybrush_2_2025-06.jpg',
-        '/assets/meetup/Guybrush-2025-06.jpg',
-        '/assets/meetup/Rivi.jpg',
+      'https://cdn.bitcoinbeer.events/meetup/DSC01623.JPG',
+      'https://cdn.bitcoinbeer.events/meetup/DSC01653.JPG',
+      'https://cdn.bitcoinbeer.events/meetup/DSC09751.JPG',
+      'https://cdn.bitcoinbeer.events/meetup/DSC09788.JPG',
+      'https://cdn.bitcoinbeer.events/meetup/DSC09814.JPG',
+      'https://cdn.bitcoinbeer.events/meetup/Granatiero.jpg',
+      'https://cdn.bitcoinbeer.events/meetup/Guybrush-2025-06.jpg',
+      'https://cdn.bitcoinbeer.events/meetup/Guybrush_2_2025-06.jpg',
+      'https://cdn.bitcoinbeer.events/meetup/Rivi.jpg',
+      'https://cdn.bitcoinbeer.events/meetup/Luca-Bitbox.jpg',
+      'https://cdn.bitcoinbeer.events/meetup/Luca-Bitbox-2.jpg',
       ],
       heroIndex: 0,
       heroProgress: 0,
@@ -215,7 +217,7 @@ export default {
     };
   },
 computed: {
-  // vero se l’evento ha biglietti attivati (di solito 0/1 nel DB)
+  // vero se l'evento ha biglietti attivati (di solito 0/1 nel DB)
   hasTickets() {
     return String(this.event?.has_tickets ?? "") === "1";
   },
@@ -231,7 +233,7 @@ computed: {
     return 0;
   },
 
-  // Evento “gratis” solo se ha i ticket attivi E il prezzo è 0
+  // Evento "gratis" solo se ha i ticket attivi E il prezzo è 0
   isFree() {
     return this.hasTickets && this.displayPrice <= 0;
   },
