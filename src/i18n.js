@@ -14,19 +14,30 @@ const messages = {
       save: "Save Preferences",
       close: "Close"
     },
-    navigation: {
-      home: "Home",
-      start: "Start",
-      explore: "Explore",
-      calendar: "Calendar",
-      blogmain: "Blog",
-      leaderboard: "Leaderboard",
-      newsletter: "Newsletter"
-    },
-    auth: {
-      profile: "Profile",
-      signOut: "Sign out"
-    },
+ navigation: {
+    menu: 'Menu',
+    home: 'Home',
+    homeDesc: 'Homepage',
+    start: 'Get started',
+    startDesc: 'How it works',
+    explore: 'Explore',
+    exploreDesc: 'Maps & communities',
+    calendar: 'Calendar',
+    calendarDesc: 'All events',
+    leaderboard: 'Leaderboard',
+    leaderboardDesc: 'Points & badges',
+    gallery: 'Gallery',
+    galleryDesc: 'Meetups photos',
+    tagline: 'Bitcoin events across Italy, leaderboard and collectible badges.',
+    ctaNewsletter: 'Subscribe to the newsletter',
+    contactUs: 'Contact us',
+    proposeMeetup: 'Propose a meetup',
+  },
+  auth: {
+    signIn: 'Sign in',
+    signOut: 'Sign out',
+    user: 'User',
+  },
     hero: {
       title: "Not Just a Meetup",
       subtitle: "Connect, learn, and have fun with Bitcoin Beer.",
@@ -384,7 +395,23 @@ const messages = {
         cancel: "Cancel",
         searching: "Searching...",
         noResults: "No results found.",
-      }
+      },
+      propose: {
+    title: 'Proponi un meetup',
+    subtitle: 'Raccontaci l’idea: città, luogo, data e dettagli.',
+    name: 'Nome',
+    email: 'Email',
+    city: 'Città',
+    when: 'Quando',
+    venue: 'Luogo',
+    details: 'Dettagli',
+    consent: 'Acconsento al trattamento dei dati per essere ricontattato.',
+    send: 'Invia proposta',
+    sending: 'Invio…',
+    emailInstead: 'Oppure invia via email',
+    ok: 'Ricevuto! Ti rispondiamo appena possibile.',
+    error: 'Qualcosa è andato storto. Prova via email.'
+  },
     
   },
 
@@ -400,20 +427,31 @@ const messages = {
       save: "Salva Preferenze",
       close: "Chiudi"
     },
-    navigation: {
-      home: "Home",
-      start: "Inizia",
-      explore: "Esplora",
-      calendar: "Calendario",
-      blogmain: "Blog",
-      leaderboard: "Classifica",
-      newsletter: "Newsletter"
-    },
-    auth: {
-      profile: "Profilo",
-      signOut: "Esci"
-    },
-    
+navigation: {
+    menu: 'Menu',
+    home: 'Home',
+    homeDesc: 'Pagina iniziale',
+    start: 'Inizia',
+    startDesc: 'Come funziona',
+    explore: 'Esplora',
+    exploreDesc: 'Mappe e community',
+    calendar: 'Calendario',
+    calendarDesc: 'Tutti gli eventi',
+    leaderboard: 'Classifica',
+    leaderboardDesc: 'Punti e badge',
+    gallery: 'Gallery',
+    galleryDesc: 'Foto dei meetup',
+    tagline: 'Eventi Bitcoin in tutta Italia, leaderboard e badge collezionabili.',
+    ctaNewsletter: 'Iscriviti alla newsletter',
+    contactUs: 'Contattaci',
+    proposeMeetup: 'Proponi un meetup',
+  },
+  auth: {
+    signIn: 'Accedi',
+    signOut: 'Esci',
+    user: 'Utente',
+  },
+  
     hero: {
       title: "Non un semplice meetup",
       subtitle: "Connettiti, impara e divertiti con Bitcoin Beer.",
@@ -755,7 +793,23 @@ const messages = {
     cancel: "Cancel",
     searching: "Searching...",
     noResults: "No results found."
-  }
+  },
+  propose: {
+    title: 'Propose a meetup',
+    subtitle: 'Tell us your idea: city, venue, date and details.',
+    name: 'Name',
+    email: 'Email',
+    city: 'City',
+    when: 'When',
+    venue: 'Venue',
+    details: 'Details',
+    consent: 'I agree to be contacted regarding my submission.',
+    send: 'Send proposal',
+    sending: 'Sending…',
+    emailInstead: 'Or send via email',
+    ok: 'Got it! We will get back to you soon.',
+    error: 'Something went wrong. Please try email.'
+  },
   }
 };
 

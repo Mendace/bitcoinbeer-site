@@ -24,29 +24,46 @@
           class="px-3 py-1 rounded-full border transition min-w-max"
           :class="activeTab==='newsletter' ? 'border-white bg-white/10 text-white' : 'border-white/20 text-gray-300 hover:text-white hover:border-white/40'"
         >Newsletter</button>
+        <button
+          :aria-selected="activeTab==='referral'"
+          @click="activeTab='referral'"
+          class="px-3 py-1 rounded-full border transition min-w-max"
+          :class="activeTab==='referral' ? 'border-white bg-white/10 text-white' : 'border-white/20 text-gray-300 hover:text-white hover:border-white/40'"
+        >
+          <i class="fas fa-users mr-1"></i>Referral
+        </button>
       </div>
       
       <!-- Contenuto tab selezionata -->
       <div class="mt-6">
         <ProfileSettingsSection v-if="activeTab==='settings'" />
         <ProfileTickets v-else-if="activeTab==='tickets'" :tickets="tickets" />
-        <NewsletterSettings v-else />
+        <NewsletterSettings v-else-if="activeTab==='newsletter'" />
+        <ReferralProfile v-else-if="activeTab==='referral'" :userEmail="userEmail" />
       </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout              from '@/components/profile/AppLayout.vue'
 import ProfileHeader          from '@/components/profile/ProfileHeader.vue'
 import ProfileSettingsSection from '@/components/profile/ProfileSettingsSection.vue'
 import ProfileTickets         from '@/components/profile/ProfileTickets.vue'
 import NewsletterSettings     from '@/components/profile/NewsletterSettings.vue'
+import ReferralProfile        from '@/components/ReferralProfile.vue'
+import { useProfile } from '@/composables/useProfile'
 
 const tickets = ref([])
 const activeTab = ref('settings')
+const { profile } = useProfile()
+
+// Computed per ottenere l'email dall'utente loggato
+const userEmail = computed(() => {
+  return profile?.value?.email || ''
+})
 
 async function loadTickets () {
   try {

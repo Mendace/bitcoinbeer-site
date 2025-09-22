@@ -32,13 +32,17 @@ import BeerLoginUnified from '@/views/BeerLoginUnified.vue';
 import ForgotPassword from '@/views/ForgotPassword.vue';
 import ResetPassword from '@/views/ResetPassword.vue';
 import NewsletterPage from '../views/NewsletterPage.vue';
-import BoltsViewer from '../views/BoltsViewer.vue'
+import BoltsViewer from '../views/BoltsViewer.vue';
+import MeetupGallery from '../views/MeetupGallery.vue';
+import ProponiMeetup from '../views/ProponiMeetup.vue';
 
 const myReels = [
   'https://peertube.uno/videos/embed/vouhzfXDksWyBPENMK2PDg',
   'https://peertube.uno/videos/embed/ikzsdapcyima26X5ewHznM',
   'https://peertube.uno/videos/embed/esYjLmeKSTkZ27U9bqKZEB',
   'https://peertube.uno/videos/embed/fAABMNStVpjqZgkMBMhQYy',
+  'https://peertube.uno/videos/embed/7P5o7Umubs7z6s2Bs6wFvu',
+
 ]
 const routes = [
   {
@@ -70,6 +74,11 @@ const routes = [
     name: 'Profile',
     component: CompleteProfile,
   },
+  {
+  path: '/proponi-meetup',
+  name: 'ProponiMeetup',
+  component: () => import('@/views/ProponiMeetup.vue')
+},
   {
     path: '/forgot-password',
     name: 'ForgotPassword',
@@ -103,6 +112,7 @@ const routes = [
     component: EventDetailPage,
     props: true
   },
+  { path: '/gallery', name: 'gallery', component: MeetupGallery },
   {
     path: '/contact',
     name: 'Contact',

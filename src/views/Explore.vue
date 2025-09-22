@@ -1,400 +1,417 @@
 <script setup>
-import { useHead } from '@vueuse/head';
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { useHead } from '@vueuse/head'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import '@fortawesome/fontawesome-free/css/all.css'
+import '@fortawesome/fontawesome-free/js/all.js'
 
-useHead({
-  title: 'Bitcoin Beer - Esplora le Community Bitcoin in Italia',
-  meta: [
-    { name: 'description', content: 'Scopri tutte le community Bitcoin in Italia sulla mappa interattiva di Bitcoin Beer. Connettiti con altri appassionati e unisciti agli eventi locali.' },
-    { name: 'keywords', content: 'Bitcoin, Community Bitcoin, Mappa Bitcoin, Eventi Bitcoin, Bitcoin Beer, Community Locali, Blockchain Italia' },
-    { name: 'author', content: 'BitcoinBeer' },
-    { name: 'viewport', content: 'width=device-width, initial-scale=1.0' },
-    { name: 'robots', content: 'index, follow' },
-    { name: 'language', content: 'Italian' },
-    { name: 'revisit-after', content: '7 days' },
-    { property: 'og:title', content: 'Bitcoin Beer - Esplora le Community Bitcoin in Italia' },
-    { property: 'og:description', content: 'Trova le community Bitcoin locali in Italia sulla mappa interattiva di Bitcoin Beer e partecipa agli eventi nella tua zona.' },
-    { property: 'og:image', content: '/assets/explore.webp' },
-    { property: 'og:url', content: 'https://bitcoinbeer.events/explore' },
-    { property: 'og:type', content: 'website' },
-    { property: 'og:locale', content: 'it_IT' },
-    { property: 'og:site_name', content: 'Bitcoin Beer' },
-    { name: 'twitter:card', content: 'summary_large_image' },
-    { name: 'twitter:title', content: 'Bitcoin Beer - Esplora le Community Bitcoin in Italia' },
-    { name: 'twitter:description', content: 'Scopri e connettiti con le community Bitcoin in Italia sulla mappa di Bitcoin Beer. Unisciti agli eventi locali.' },
-    { name: 'twitter:image', content: '/assets/explore.webp' },
-    { name: 'twitter:site', content: '@BitcoinBeerIT' },
-    { name: 'twitter:creator', content: '@BitcoinBeerIT' },
-  ],
-  link: [
-    { rel: 'canonical', href: 'https://bitcoinbeer.events/explore' },
-  ],
-  script: [
-    {
-      type: 'application/ld+json',
-      children: JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'WebPage',
-        name: 'Bitcoin Beer - Esplora le Community Bitcoin',
-        description: 'Scopri tutte le community Bitcoin in Italia sulla mappa interattiva di Bitcoin Beer.',
-        url: 'https://bitcoinbeer.events/explore',
-        mainEntity: {
-          '@type': 'Map',
-          name: 'Mappa delle Community Bitcoin in Italia',
-          url: 'https://bitcoinbeer.events/explore',
-          additionalProperty: [
-            {
-              '@type': 'PropertyValue',
-              name: 'Numero di Community',
-              value: '{{ totalCommunities }}'
-            },
-            {
-              '@type': 'PropertyValue',
-              name: 'Eventi Attivi',
-              value: '{{ activeEvents }}'
-            }
-          ]
-        }
-      }),
-    },
-  ],
-});
+useHead({ title: 'Bitcoin Beer — Esplora le community' })
+
+/* ==== ENDPOINTS ==== */
+const COMMUNITIES_URL = 'https://api.bitcoinbeer.events/data/communities.json'
+const GROUPS_URL      = 'https://api.bitcoinbeer.events/data/group_data.json'
+const API_COMMUNITIES = 'https://api.bitcoinbeer.events/api/community_gamification.php'
+const API_KEY         = '0215efb408569f4590cc2108cae33689b4901475a994d2ec5be1e59af0fc231a'
+
+/* ==== BADGE (come leaderboard) ==== */
+const BADGE = {
+  1:'/assets/badges/lv1.png', 2:'/assets/badges/lv2.png', 3:'/assets/badges/lv3.png',
+  4:'/assets/badges/lv4.png', 5:'/assets/badges/lv5.png', 6:'/assets/badges/lv6.png'
+}
+
+/* ==== STATE ==== */
+const loading = ref(true)
+const errorMsg = ref('')
+const search   = ref('')
+
+let map, markersLayer
+const rows = ref([])
+
+/* ==== UTILITIES ==== */
+const norm = (s)=> String(s||'').toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  .replace(/bitcoinbeer|bitcoin/g,'')
+  .replace(/[^\p{L}\p{N}\s-]/gu,'')
+  .replace(/\s+/g,' ')
+  .trim()
+
+const firstCity = (s)=> String(s||'').split(',')[0].trim()
+const dicebear  = (seed)=> `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(String(seed||'community'))}`
+const lvl = (p)=>{ p=+p||0; if(p>=400)return 5; if(p>=300)return 4; if(p>=200)return 3; if(p>=100)return 2; return 1 }
+function esc(s){
+  return String(s ?? '')
+    .replaceAll('&','&amp;').replaceAll('<','&lt;')
+    .replaceAll('>','&gt;').replaceAll('"','&quot;')
+    .replaceAll("'",'&#39;')
+}
+function extractCitiesFromGroupName(name){
+  const parts = String(name||'').split('-'), arr=[]
+  for(const p of parts){
+    const cleaned=p.replace(/Bitcoin(?:Beer)?\s*/i,'').trim()
+    const city=cleaned.replace(/[^a-zA-ZÀ-ÿ\s]/g,'').trim()
+    if(city) arr.push(city)
+  }
+  return arr
+}
+
+/* ==== DATA MERGE (base = communities.json; avatar/nome/punti = leaderboard) ==== */
+async function fetchAll(){
+  loading.value=true; errorMsg.value=''
+  try{
+    const [cRes,gRes,lRes] = await Promise.all([
+      fetch(COMMUNITIES_URL, { cache:'no-store' }),
+      fetch(GROUPS_URL,      { cache:'no-store' }),
+      fetch(`${API_COMMUNITIES}?${new URLSearchParams({ action:'communities', limit:'500', api_key:API_KEY })}`, { cache:'no-store' })
+    ])
+    if(!cRes.ok) throw new Error('Errore communities.json')
+    if(!gRes.ok) throw new Error('Errore group_data.json')
+    if(!lRes.ok) throw new Error('Errore leaderboard community')
+
+    const [communitiesData, groupsData, leaderboardData] =
+      await Promise.all([cRes.json(), gRes.json(), lRes.json()])
+
+    // leaderboard indicizzata su più chiavi
+    const lbItems = Array.isArray(leaderboardData?.communities) ? leaderboardData.communities : []
+    const idxLB = new Map()
+    for(const c of lbItems){
+      const keys = new Set([
+        norm(c.city),
+        norm(firstCity(c.city)),
+        norm(c.name),
+        norm((c.name||'').split('-')[0])
+      ].filter(Boolean))
+      keys.forEach(k => { if(!idxLB.has(k)) idxLB.set(k, c) })
+    }
+
+    // indicizzazione gruppi per città + per parole chiave nel nome
+    const groups = Array.isArray(groupsData?.groups) ? groupsData.groups : []
+    const groupsByCity = new Map()
+    for(const g of groups){
+      const cities = extractCitiesFromGroupName(g.group_name)
+      for(const city of cities){
+        const k = norm(city)
+        const arr = groupsByCity.get(k) || []
+        arr.push(g); groupsByCity.set(k, arr)
+      }
+    }
+    // helper: trova gruppi per community con vari fallback
+    function findGroupsFor(display, city){
+      const keyCity = norm(city)
+      const keyName = norm(display)
+      const res = new Set()
+
+      ;(groupsByCity.get(keyCity)||[]).forEach(x=>res.add(x))
+
+      // fallback: substring match nel nome gruppo
+      for(const g of groups){
+        const gn = norm(g.group_name)
+        if(gn.includes(keyName) || keyName.includes(gn)) res.add(g)
+        if(keyCity && (gn.includes(keyCity) || keyCity.includes(gn))) res.add(g)
+      }
+      return Array.from(res)
+    }
+
+    // BASE = communities.json
+    const out = []
+    for(const cm of (communitiesData||[])){
+      const city     = firstCity(cm.city)
+      const keyCity  = norm(city)
+      const lat = +cm.latitude, lng = +cm.longitude
+      if(!Number.isFinite(lat)||!Number.isFinite(lng)) continue
+
+      const lb = idxLB.get(keyCity) || idxLB.get(norm(cm.city)) || null
+
+      const displayFull = lb?.name || lb?.city || city || 'Community'
+      const points = +(lb?.points||0)
+      const level  = Number.isFinite(+lb?.level) ? +lb.level : lvl(points)
+      const badge  = BADGE[Math.max(1,Math.min(6,level||1))]
+      const avatar = (lb?.avatar_url && String(lb.avatar_url).length>0) ? lb.avatar_url : dicebear(displayFull)
+
+      const links = {
+        telegram: lb?.telegram || cm.telegram || '',
+        instagram: lb?.instagram || cm.instagram || '',
+        x:        lb?.x        || cm.x        || '',
+        mastodon: lb?.mastodon || cm.mastodon || '',
+      }
+
+      out.push({
+        id: `community-${lb?.id ?? keyCity}`,
+        name: displayFull,
+        city: lb?.city || city,
+        lat, lng,
+        bio: cm.bio || '',
+        points, level, badge, avatar, links,
+        groups: findGroupsFor(displayFull, city)
+      })
+    }
+
+    out.sort((a,b)=> (b.points-a.points) || a.name.localeCompare(b.name))
+    rows.value = out
+
+    await nextTick()
+    drawMarkers()
+  }catch(e){ errorMsg.value = e.message || String(e) }
+  finally{ loading.value=false }
+}
+
+/* ==== MAPPA (box; marker tondo senza bordo) ==== */
+function markerHTML(avatarUrl){
+  return `
+    <div style="width:40px;height:40px;border-radius:999px;overflow:hidden;box-shadow:0 6px 14px rgba(0,0,0,.45)">
+      <img src="${avatarUrl}" alt="" style="width:100%;height:100%;object-fit:cover"/>
+    </div>`
+}
+function popupHTML(c){
+  const groups = (c.groups&&c.groups.length)
+    ? `<div class="pg-title">Gruppo Telegram</div>${c.groups.map(g=>`
+        <div class="pg">
+          <div class="pg-name">${esc(g.group_name)}</div>
+          <div class="pg-stats"><span><i class="fas fa-user-friends"></i> ${g.user_count ?? '—'}</span><span><i class="fas fa-comment-dots"></i> ${g.message_count ?? '—'}</span></div>
+          ${Array.isArray(g.administrators)&&g.administrators.length?`<div class="pg-admins"><strong>Admin:</strong> ${g.administrators.map(a=>esc(a.first_name)).join(', ')}</div>`:''}
+        </div>`).join('')}`
+    : ''
+  const socials = `
+    <div class="social">
+      ${c.links.telegram ? `<a href="${c.links.telegram}" target="_blank" title="Telegram"><i class="fab fa-telegram-plane"></i></a>` : ''}
+      ${c.links.instagram ? `<a href="${c.links.instagram}" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>` : ''}
+      ${c.links.x ? `<a href="${c.links.x}" target="_blank" title="X"><i class="fab fa-x-twitter"></i></a>` : ''}
+      ${c.links.mastodon ? `<a href="${c.links.mastodon}" target="_blank" title="Mastodon"><i class="fab fa-mastodon"></i></a>` : ''}
+    </div>`
+  return `
+    <div class="bbpop">
+      <div class="head">
+        <img src="${c.avatar}" class="ava" alt=""/>
+        <div>
+          <div class="name">${esc(c.name)}</div>
+          ${c.bio?`<div class="bio">${esc(c.bio)}</div>`:''}
+        </div>
+      </div>
+      <div class="kpis">
+        <div class="k"><div class="kl">Punti</div><div class="kv">${c.points}</div></div>
+        <div class="k"><div class="kl">Livello</div><div class="kv">${c.level}</div></div>
+        <div class="k k-b"><img src="${c.badge}" alt="badge"/><div class="kl">Badge</div></div>
+      </div>
+      ${groups}
+      ${socials}
+    </div>`
+}
+
+function drawMarkers(){
+  if(!map||!markersLayer) return
+  markersLayer.clearLayers()
+  for(const c of filtered.value){
+    const icon = L.divIcon({ className:'bbm', html:markerHTML(c.avatar), iconSize:[40,40], iconAnchor:[20,20], popupAnchor:[0,-22] })
+    const m = L.marker([c.lat,c.lng], { icon })
+    m.bindPopup(popupHTML(c), { className:'bbp', maxWidth:360 })
+    markersLayer.addLayer(m)
+  }
+}
+
+async function initMap(){
+  map = L.map('map', {
+    center:[41.9,12.5], zoom:5,
+    layers:[L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{ attribution:'&copy; OpenStreetMap & CARTO', subdomains:'abcd', maxZoom:19 })],
+    zoomControl:true
+  })
+  markersLayer = L.layerGroup().addTo(map)
+}
+
+/* ==== LISTA/FILTRO ==== */
+const filtered = computed(()=>{
+  const q = search.value.trim().toLowerCase()
+  if(!q) return rows.value
+  return rows.value.filter(c => (c.name||'').toLowerCase().includes(q) || (c.city||'').toLowerCase().includes(q))
+})
+function go(item){
+  if(!map) return
+  map.setView([item.lat,item.lng], 11, { animate:true })
+  setTimeout(()=> L.popup({ className:'bbp', maxWidth:360 }).setLatLng([item.lat,item.lng]).setContent(popupHTML(item)).openOn(map), 100)
+}
+
+/* ==== LIFECYCLE ==== */
+onMounted(async ()=>{
+  await nextTick()
+  await initMap()
+  await fetchAll()
+})
 </script>
 
 <template>
-  <div>
-    <!-- Hero Section -->
-    <section id="hero" class="hero-section">
-      <!-- Image Overlay -->
-      <div class="hero-image-overlay"></div>
-      <div class="hero-content">
-        <h1>{{ $t('welcome.welcome_message') }}</h1>
-        <p>{{ $t('welcome.welcome_submessage') }}</p>
-      </div>
-      <div class="scroll-indicator" @click="scrollToMap">
-        <i class="fas fa-chevron-down"></i>
-      </div>
-    </section>
+  <!-- SPAZIO per la navbar -->
+  <div class="explore-wrap">
+    <div class="container">
+      <header class="hdr">
+        <h1>Esplora le community</h1>
+        <div class="search">
+          <i class="fas fa-search"></i>
+          <input v-model="search" type="search" placeholder="Cerca città o community…" aria-label="Cerca"/>
+          <span class="count" :title="`Community mostrate`">{{ filtered.length }}</span>
+        </div>
+      </header>
 
-    <!-- Parallax Section con Mappa -->
-    <section id="parallax-section" class="parallax-section">
-      <div class="map-container">
-        <div id="map"></div>
+      <!-- CARD: desktop = 2 colonne; mobile = lista orizzontale + mappa sotto -->
+      <div class="card">
+        <aside class="list">
+          <div v-if="errorMsg" class="list__info error"><i class="fas fa-triangle-exclamation"></i> {{ errorMsg }}</div>
+          <div v-if="loading" class="list__info"><i class="fas fa-spinner fa-spin"></i> Caricamento…</div>
+
+          <button v-for="c in filtered" :key="c.id" class="row" @click="go(c)">
+            <img :src="c.avatar" :alt="c.name" class="row__avatar" />
+            <div class="row__info">
+              <div class="row__name">{{ c.name }}</div>
+              <div class="row__meta">
+                <img :src="c.badge" alt="badge" class="row__badge"/>
+                <span class="row__points">{{ c.points }} pt</span>
+                <span class="row__level">Lv {{ c.level }}</span>
+              </div>
+            </div>
+          </button>
+
+          <div v-if="!loading && !filtered.length" class="list__info">Nessuna community</div>
+        </aside>
+
+        <main class="mapbox">
+          <div id="map" class="map"></div>
+        </main>
       </div>
-    </section>
+    </div>
   </div>
 </template>
 
-<script>
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import customPin from '/logos/marker.webp';
-import '@fortawesome/fontawesome-free/css/all.css'; // Importa FontAwesome CSS
-import '@fortawesome/fontawesome-free/js/all.js'; // Importa FontAwesome JS
+<style>
+/* ===== Offset NAVBAR ===== */
+:root{
+  --nav-h: 78px;   /* alza/abbassa se la tua navbar è diversa */
+  --page-pad: 16px;
+  --header-h: 56px;
+}
 
-export default {
-  name: 'ImprovedMapPage',
-  data() {
-    return {
-      map: null,
-      customIcon: null,
-      groups: [],
-      groupLookup: {},
-      pollingInterval: null, // Aggiunto per gestire l'intervallo di polling
-    };
-  },
-  mounted() {
-    // Inizializza l'icona personalizzata
-    this.customIcon = new L.Icon({
-      iconUrl: customPin,
-      iconSize: [30, 30],
-      iconAnchor: [15, 30],
-    });
+/* pagina sotto la navbar */
+.explore-wrap{
+  padding-top: calc(var(--nav-h) + 14px);
+  background:#0b0b0b; min-height:100vh; color:#fff;
+}
+.container{ max-width:1200px; margin:0 auto; padding:var(--page-pad); }
 
-    // Inizializza la mappa dopo che il DOM è pronto
-    this.$nextTick(() => {
-      this.initMap();
-      this.fetchData(); // Fetch iniziale
+/* Header */
+.hdr{
+  height: var(--header-h);
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin-bottom:12px;
+}
+.hdr h1{ font-size:1.4rem; font-weight:800; margin:0; }
+.search{ display:flex; align-items:center; gap:10px; }
+.search input{
+  width:min(480px, 70vw); padding:10px 12px; border-radius:10px;
+  border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.06); color:#fff; outline:none;
+}
+.count{ font-weight:700; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.16); padding:6px 10px; border-radius:999px; }
 
-      // Imposta il polling per aggiornare i dati ogni 30 secondi (30000 ms)
-      this.pollingInterval = setInterval(this.fetchData, 30000);
-    });
-  },
-  beforeUnmount() {
-    // Pulisce l'intervallo di polling quando il componente viene distrutto
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
-    }
-  },
-  methods: {
-    scrollToMap() {
-      const mapSection = document.getElementById('parallax-section');
-      if (mapSection) {
-        mapSection.scrollIntoView({ behavior: 'smooth' });
-      }
-    },
-    initMap() {
-      this.map = L.map('map', {
-        center: [41.9028, 12.4964], // Centra sull'Italia
-        zoom: 5,
-        layers: [
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution:
-              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19,
-          }),
-        ],
-      });
-    },
-    buildGroupLookup() {
-      this.groups.forEach((group) => {
-        const cities = this.extractCitiesFromGroupName(group.group_name);
-        cities.forEach((city) => {
-          const normalizedCity = city.toLowerCase();
-          if (this.groupLookup[normalizedCity]) {
-            this.groupLookup[normalizedCity].push(group);
-          } else {
-            this.groupLookup[normalizedCity] = [group];
-          }
-        });
-      });
-      console.log('Group Lookup:', this.groupLookup);
-    },
-    extractCitiesFromGroupName(groupName) {
-      // Supponiamo che le città siano separate da '-'
-      // Esempio: "BitcoinBeer Firenze-Prato⚡️" -> ["Firenze", "Prato"]
-      // E "Bitcoin Parma" -> ["Parma"]
-      const parts = groupName.split('-');
-      const cities = [];
+/* Card contenitore = ALTEZZA FISSA: lista e mappa uguali */
+.card{
+  height: calc(100vh - var(--nav-h) - var(--page-pad)*2 - var(--header-h) - 20px);
+  min-height: 540px;
+  display:grid; grid-template-columns: 340px 1fr; gap:16px;
+  background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+  border-radius:16px; padding:12px; backdrop-filter: blur(6px);
+  box-shadow: 0 18px 40px rgba(0,0,0,.35);
+}
 
-      parts.forEach((part) => {
-        // Rimuove "BitcoinBeer" o "Bitcoin" se presente
-        const cleanedPart = part.replace(/Bitcoin(?:Beer)?\s*/i, '').trim();
-        // Rimuove eventuali caratteri speciali
-        const city = cleanedPart.replace(/[^a-zA-ZÀ-ÿ\s]/g, '').trim();
-        if (city) {
-          cities.push(city);
-        }
-      });
+/* Scrollbar dark elegante (WebKit) */
+.list::-webkit-scrollbar{ width:10px; height:10px; }
+.list::-webkit-scrollbar-track{ background:rgba(255,255,255,.04); border-radius:8px; }
+.list::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg, rgba(255,255,255,.25), rgba(255,255,255,.15));
+  border:2px solid rgba(0,0,0,.25); border-radius:8px;
+}
+.list{ scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.35) rgba(255,255,255,.08); }
 
-      return cities;
-    },
-    addMarkers(data) {
-      // Rimuovi i marker esistenti prima di aggiungerne di nuovi
-      if (this.markersLayer) {
-        this.map.removeLayer(this.markersLayer);
-      }
-      this.markersLayer = L.layerGroup().addTo(this.map);
+/* Lista */
+.list{
+  height: 100%;
+  overflow:auto;
+  border-radius:12px; border:1px solid rgba(255,255,255,.12);
+  background:rgba(0,0,0,.4); padding:8px;
+}
+.row{
+  width:100%; text-align:left; display:flex; gap:10px; align-items:center;
+  background:rgba(255,255,255,.05); border:1px solid transparent; border-radius:10px;
+  padding:8px; color:#fff;
+}
+.row + .row{ margin-top:8px; }
+.row:hover{ border-color:rgba(255,255,255,.2); background:rgba(255,255,255,.08); cursor:pointer; }
+.row__avatar{ width:32px; height:32px; border-radius:999px; object-fit:cover; }
+.row__info{ flex:1; min-width:0; }
+.row__name{ font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.row__meta{ display:flex; align-items:center; gap:10px; margin-top:2px; font-size:.94rem; color:#e8e8e8; }
+.row__badge{ width:18px; height:18px; } /* + grande */
+.row__points{ opacity:.95; }
+.row__level{ color:#ffd166; font-weight:800; }
+.list__info{ padding:14px; text-align:center; color:#d1d5db; }
+.list__info.error{ color:#fca5a5; }
 
-      data.forEach((community) => {
-        const latitude = parseFloat(community.latitude);
-        const longitude = parseFloat(community.longitude);
+/* Mappa = riempie tutta la colonna destra */
+.mapbox{
+  height: 100%;
+  border-radius:12px; border:1px solid rgba(255,255,255,.12);
+  overflow:hidden; background:rgba(0,0,0,.35);
+}
+.map{ width:100%; height:100%; }
 
-        // Verifica se latitude e longitude sono validi
-        if (isNaN(latitude) || isNaN(longitude)) {
-          console.warn(`Coordinate non valide per la community: ${community.city}`);
-          return;
-        }
-
-        const marker = L.marker([latitude, longitude], { icon: this.customIcon }).addTo(this.markersLayer);
-
-        // Estrarre la città dal campo "city"
-        const communityCity = this.extractCityFromCommunity(community.city);
-        const normalizedCommunityCity = communityCity.toLowerCase();
-
-        // Verificare se esiste un gruppo associato a questa città
-        const associatedGroups = this.groupLookup[normalizedCommunityCity] || [];
-
-        console.log(`Community: ${communityCity}, Groups:`, associatedGroups);
-
-        // Costruire il contenuto del popup
-        let popupContent = `
-          <div class="map-popup">
-            <div class="popup-header">
-            <img src="/logos/marker.webp" alt="Logo" class="popup-logo"/>              <h3 class="popup-title">${community.city}</h3>
-            </div>
-            <div class="popup-separator"></div>
-            ${community.bio ? `<p class="popup-bio">${community.bio}</p>` : ''}
-        `;
-
-        // Se ci sono gruppi associati, aggiungi le info dei gruppi
-        if (associatedGroups.length > 0) {
-          popupContent += `<div class="groups-section"><h4 class="groups-title">Gruppo di riferimento</h4>`;
-          associatedGroups.forEach((group) => {
-            popupContent += `
-              <div class="group-info">
-                <h5 class="group-name">${group.group_name}</h5>
-                <p><strong>Admin:</strong> ${group.administrators.map(admin => admin.first_name).join(', ')}</p>
-                <p><strong>Utenti:</strong> ${group.user_count}</p>
-                <p><strong>Messaggi:</strong> ${group.message_count}</p>
-              </div>
-            `;
-          });
-          popupContent += `</div>`;
-        }
-
-        // Aggiungi le icone social come già fatto
-        popupContent += `
-            <div class="popup-social">
-              ${community.telegram ? `<a href="${community.telegram}" target="_blank" title="Telegram"><i class="fab fa-telegram-plane"></i></a>` : ''}
-              ${community.instagram ? `<a href="${community.instagram}" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>` : ''}
-              ${community.x ? `<a href="${community.x}" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>` : ''}
-              ${community.mastodon ? `<a href="${community.mastodon}" target="_blank" title="Mastodon"><i class="fab fa-mastodon"></i></a>` : ''}
-            </div>
-          </div>
-        `;
-
-        marker.bindPopup(popupContent);
-      });
-    },
-    extractCityFromCommunity(cityField) {
-      // Supponendo che il formato sia "Città, Regione, Paese"
-      // Esempio: "Parma, Emilia-Romagna, Italia" -> "Parma"
-      const parts = cityField.split(',');
-      return parts[0].trim();
-    },
-    changeLanguage(lang) {
-      this.$i18n.locale = lang;
-    },
-    // Nuovo metodo per il polling
-    fetchData() {
-      const communitiesUrl = 'https://api.bitcoinbeer.events/data/communities.json';
-      const groupsUrl = 'https://api.bitcoinbeer.events/data/group_data.json';
-
-      // Recupera entrambi i JSON in parallelo
-      Promise.all([fetch(communitiesUrl), fetch(groupsUrl)])
-        .then(async ([communitiesRes, groupsRes]) => {
-          if (!communitiesRes.ok) {
-            throw new Error('Errore nel recupero di communities.json');
-          }
-          if (!groupsRes.ok) {
-            throw new Error('Errore nel recupero di group_data.json');
-          }
-          const communitiesData = await communitiesRes.json();
-          const groupsData = await groupsRes.json();
-
-          // Verifica se ci sono cambiamenti nei gruppi
-          if (JSON.stringify(this.groups) !== JSON.stringify(groupsData.groups)) {
-            this.groups = groupsData.groups;
-            this.buildGroupLookup();
-          }
-
-          // Aggiorna i marker sulla mappa
-          this.addMarkers(communitiesData);
-        })
-        .catch((error) => {
-          console.error('Errore nel recupero dei dati:', error);
-        });
-    },
-  },
-};
-</script>
-
-
-<style scoped>
-/* Hero Section */
-.hero-section {
-  position: relative;
-  height: 100vh; /* Occupa l'intera altezza dello schermo */
-  background-color: #000; /* Sfondo nero profondo */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: #fff;
+/* Leaflet popup */
+.bbp .leaflet-popup-content-wrapper{ background:rgba(17,17,17,.96); border:1px solid rgba(255,255,255,.12); color:#fff; border-radius:14px; backdrop-filter: blur(8px); }
+.bbp .leaflet-popup-tip{ background:rgba(17,17,17,.96); border:1px solid rgba(255,255,255,.12); }
+.bbpop{ min-width:260px; display:flex; flex-direction:column; gap:10px; }
+.bbpop .head{ display:flex; gap:10px; align-items:center; }
+.bbpop .ava{ width:36px; height:36px; border-radius:999px; object-fit:cover; }
+.bbpop .name{ font-weight:800; font-size:1.02rem; }
+.bbpop .bio{ font-size:.9rem; color:#d1d5db; margin-top:2px; }
+.bbpop .kpis{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.bbpop .k{ padding:8px; border-radius:10px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); text-align:center; }
+.bbpop .kl{ color:#cfcfcf; font-size:0.85rem; text-transform:uppercase; letter-spacing:.06em; }
+.bbpop .kv{ font-size:1.05rem; font-weight:800; margin-top:1px; }
+.bbpop .k-b { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.bbpop .k-b img{ width:40px; height:40px; margin-bottom: 4px; }
+.bbpop .k-b .kl {
+  font-size: 0.85rem;
   text-align: center;
-  overflow: hidden;
 }
+.pg-title{ font-weight:800; font-size:.92rem; color:#e5e7eb; margin-top:6px; }
+.pg{ padding:8px; border-radius:10px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); margin-top:6px; }
+.pg-name{ font-weight:700; margin-bottom:4px; }
+.pg-stats{ display:flex; gap:12px; font-size:.9rem; color:#e5e5e5; }
+.pg-admins{ margin-top:4px; font-size:.9rem; color:#d1d5db; }
+.social{ display:flex; gap:12px; margin-top:6px; }
+.social a{ color:#fff; opacity:.9; }
+.social a:hover{ color:#ffd166; opacity:1; }
 
-.hero-image-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-image: url('/assets/world.webp'); /* Sostituisci con il percorso corretto */
-  background-size: cover;
-  background-position: center;
-  opacity: 0.3; /* Regola l'opacità secondo necessità */
-  z-index: 1;
-}
-
-.hero-content {
-  position: relative;
-  z-index: 2;
-  padding: 0 20px;
-}
-
-.hero-content h1 {
-  font-size: 4rem;
-  font-weight: 900;
-  margin-bottom: 20px;
-  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7);
-}
-
-.hero-content p {
-  font-size: 1.5rem;
-  max-width: 800px;
-  margin: 0 auto;
-  text-shadow: 1px 1px 6px rgba(0, 0, 0, 0.6);
-}
-
-/* Scroll Indicator */
-.scroll-indicator {
-  position: absolute;
-  bottom: 2rem;
-  font-size: 2rem;
-  color: #fff;
-  animation: bounce 2s infinite;
-  cursor: pointer;
-  z-index: 2;
-}
-
-@keyframes bounce {
-  0%, 20%, 50%, 80%, 100% {
-    transform: translateY(0);
+/* ===== MOBILE: lista orizzontale a swipe + mappa sotto ===== */
+@media (max-width: 900px){
+  .card{
+    grid-template-columns: 1fr;
+    height: calc(100vh - var(--nav-h) - var(--page-pad)*2 - var(--header-h) - 16px);
+    min-height: 520px;
   }
-  40% {
-    transform: translateY(-10px);
+  .list{
+    display:flex; gap:10px; padding:10px;
+    overflow-x:auto; overflow-y:hidden; height:auto; /* non occupa tutta l'altezza */
+    scroll-snap-type: x proximity;
   }
-  60% {
-    transform: translateY(-5px);
+  .row{
+    flex: 0 0 85vw; /* card larghe per swipe comodo */
+    scroll-snap-align: start;
   }
-}
+  .mapbox{
+    height: 55vh; /* mappa sempre visibile */
+    min-height: 340px;
+  }
 
-/* Parallax Section */
-.parallax-section {
-  /* Effetto Parallax */
-  background-image: url('/assets/background-map.webp'); /* Sostituisci con il percorso corretto */
-  height: 100vh;
-  background-attachment: fixed;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-}
-
-/* Map Container */
-.map-container {
-  background: rgba(255, 255, 255, 0.1); /* Semi-trasparente per effetto glassmorphism */
-  border-radius: 15px;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); /* Effetto ombra */
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  padding: 20px;
-  width: 80%;
-  max-width: 800px;
-  height: 80%;
-  max-height: 600px;
-  position: relative;
-}
-
-#map {
-  width: 100%;
-  height: 100%;
-  border-radius: 10px;
+  /* scrollbar orizzontale chic su mobile */
+  .list::-webkit-scrollbar{ height:8px; }
+  .list::-webkit-scrollbar-thumb{
+    background:linear-gradient(90deg, rgba(255,255,255,.3), rgba(255,255,255,.18));
+    border:2px solid rgba(0,0,0,.25); border-radius:8px;
+  }
 }
 </style>

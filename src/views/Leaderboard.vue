@@ -15,10 +15,20 @@
             'px-4 py-1.5 rounded-full border transition',
             mode===opt.key ? 'border-white bg-white/15 text-white' : 'border-white/20 text-white/70 hover:border-white/40'
           ]"
-        >{{ opt.label }}</button>
+        >
+          <i v-if="opt.key === 'referral'" class="fas fa-users mr-1"></i>
+          {{ opt.label }}
+        </button>
       </div>
 
-      <div v-if="topThree.length" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <!-- Referral Leaderboard Component -->
+      <div v-if="mode === 'referral'">
+        <ReferralLeaderboard :userEmail="userEmail" :limit="20" />
+      </div>
+
+      <!-- Standard Leaderboard (users/communities) -->
+      <div v-else>
+        <div v-if="topThree.length" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
         <div
           v-for="(u,idx) in topThree"
           :key="u.key"
@@ -82,6 +92,7 @@
         <div v-if="loading" class="p-6 text-center text-gray-400">Caricamento…</div>
         <div v-if="error" class="p-4 text-center text-red-300">{{ error }}</div>
       </div>
+      </div> <!-- Fine standard leaderboard -->
     </div>
   </section>
 
@@ -143,6 +154,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useProfile } from '@/composables/useProfile'
+import ReferralLeaderboard from '@/components/ReferralLeaderboard.vue'
 
 const API_USERS = 'https://api.bitcoinbeer.events/api/gamification.php'
 const API_COMMUNITIES = 'https://api.bitcoinbeer.events/api/community_gamification.php'
@@ -150,7 +162,8 @@ const API_KEY = '0215efb408569f4590cc2108cae33689b4901475a994d2ec5be1e59af0fc231
 
 const modes = [
   { key: 'users', label: 'Leaderboard utenti' },
-  { key: 'communities', label: 'Leaderboard community' }
+  { key: 'communities', label: 'Leaderboard community' },
+  { key: 'referral', label: 'Referral Leaderboard' }
 ]
 const mode = ref('users')
 
@@ -162,6 +175,11 @@ const revealKey = ref(null)
 const toast = ref('')
 let toastTimer
 const selectedUser = ref(null)
+
+// Computed per ottenere l'email dall'utente loggato
+const userEmail = computed(() => {
+  return profile?.value?.email || ''
+})
 
 const BADGE_BY_LEVEL = { 1:'/assets/badges/lv1.png', 2:'/assets/badges/lv2.png', 3:'/assets/badges/lv3.png', 4:'/assets/badges/lv4.png', 5:'/assets/badges/lv5.png', 6:'/assets/badges/lv6.png' }
 
@@ -177,16 +195,29 @@ function maskName(v){ const n=String(v??''); if(!n.length) return ''; if(n.lengt
 function normEmail(em){ try{const s=String(em||'').trim().toLowerCase(); const [loc,dom]=s.split('@'); if(!loc||!dom) return s; if(dom==='gmail.com'||dom==='googlemail.com'){return `${loc.split('+')[0].replaceAll('.','')}@${dom}`} return `${loc}@${dom}`}catch{return String(em||'').toLowerCase()} }
 function avatarFor(row){ const seed = displayFor(row) || row.city || 'community'; return `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(seed)}` }
 
-const modeTitle = computed(()=> mode.value==='users' ? 'Leaderboard utenti' : 'Leaderboard community')
-const modeSubtitle = computed(()=> mode.value==='users' ? 'Classifica livelli e punti (con moltiplicatori)' : 'Punti community = 1 per ticket (senza moltiplicatori)')
-const columnLabel = computed(()=> mode.value==='users' ? 'Utente' : 'Community')
+const modeTitle = computed(()=> {
+  if (mode.value === 'users') return 'Leaderboard utenti'
+  if (mode.value === 'communities') return 'Leaderboard community'
+  return 'Referral Leaderboard'
+})
+const modeSubtitle = computed(()=> {
+  if (mode.value === 'users') return 'Classifica livelli e punti (con moltiplicatori)'
+  if (mode.value === 'communities') return 'Punti community = 1 per ticket (senza moltiplicatori)'
+  return 'Classifica dei migliori referrer - invita amici e guadagna punti!'
+})
+const columnLabel = computed(()=> {
+  if (mode.value === 'users') return 'Utente'
+  if (mode.value === 'communities') return 'Community'
+  return 'Referrer'
+})
 const pointsLabel = computed(()=> 'Punti')
 const topThree = computed(()=> users.value.slice(0,3))
 const rest = computed(()=> users.value.slice(3))
 
-function setMode(key){ if(mode.value===key) return; mode.value=key; revealKey.value=null; selectedUser.value=null; load() }
+function setMode(key){ if(mode.value===key) return; mode.value=key; revealKey.value=null; selectedUser.value=null; if(key !== 'referral') load() }
 
 async function load(){
+  if(mode.value === 'referral') return; // Il componente ReferralLeaderboard gestisce i propri dati
   loading.value=true; error.value=''
   try { if (mode.value==='users') await loadUsers(); else await loadCommunities(); }
   catch(e){ error.value=e.message||String(e) }

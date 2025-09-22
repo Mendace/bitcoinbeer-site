@@ -1,134 +1,157 @@
+<!-- src/components/NavbarMega.vue -->
 <template>
-  <!-- Navbar fissa -->
+  <!-- NAVBAR SEMPRE NERA -->
   <nav
-    class="fixed inset-x-0 top-0 z-50 bg-black/60 backdrop-blur-md text-white transition-all px-4 sm:px-6"
-    :class="isScrolled ? 'py-2' : 'py-6'"
+    class="fixed inset-x-0 top-0 z-50 bg-black text-white border-b border-white/5"
+    :class="isScrolled ? 'py-2' : 'py-3'"
+    role="navigation"
+    aria-label="Main"
   >
-    <div class="max-w-screen-xl mx-auto flex items-center justify-between">
-      <!-- Sinistra: Logo e menu desktop -->
-      <div class="flex items-center">
-        <router-link to="/" class="flex items-center space-x-3">
-          <img src="/logos/marker.webp" class="h-8 w-auto" alt="Logo BitcoinBeer" />
+    <div class="mx-auto max-w-screen-2xl px-4 sm:px-6">
+      <div class="flex items-center justify-between">
+        <router-link to="/" class="flex items-center gap-3">
+          <img src="/logos/marker.webp" class="h-8 w-auto" alt="BitcoinBeer" />
+          <span class="hidden sm:block text-sm font-medium tracking-wide text-white/85">Bitcoin Beer</span>
         </router-link>
-        <div class="h-6 w-px bg-white/60 mx-4" />
-        <ul class="hidden md:flex items-center space-x-6">
-          <li v-for="link in links" :key="link.to">
-            <router-link :to="link.to" class="hover:underline text-white" :class="{ 'font-semibold': isActive(link.to) }">
-              {{ $t(link.labelKey) }}
-            </router-link>
-          </li>
-        </ul>
-      </div>
 
-      <!-- Destra: lingua desktop, avatar/login, hamburger mobile -->
-      <div class="flex items-center space-x-4">
-        <!-- Lingua desktop -->
-        <select
-          v-model="$i18n.locale"
-          class="hidden md:block bg-transparent border border-white rounded px-2 py-1 focus:outline-none text-white"
-        >
-          <option value="it">IT</option>
-          <option value="en">EN</option>
-        </select>
-
-        <!-- Avatar / Login -->
-        <div class="relative">
-          <!-- Se loggati -->
-          <button v-if="isLogged" @click="toggleDropdown" class="p-1 focus:outline-none">
-            <img :src="profile.avatar || defaultAvatar" class="h-8 w-8 rounded-full ring-2 ring-white/10" alt="Avatar" />
+        <div class="flex items-center gap-3">
+          <button
+            v-if="isLogged"
+            @click="openMenu"
+            class="hidden sm:block focus:outline-none"
+            aria-label="Open account menu"
+          >
+            <img :src="profile.avatar || defaultAvatar" class="h-8 w-8 rounded-full ring-2 ring-white/10 object-cover" alt="Avatar" />
           </button>
 
-          <!-- Se non loggati -->
-          <router-link
-            v-else
-            to="/login"
-            class="p-2 text-white hover:text-orange-500 transition-colors"
+          <button
+            @click="openMenu"
+            class="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/5 px-3 py-2 hover:bg-white/10 active:scale-[0.98] transition"
+            :aria-expanded="menuOpen ? 'true' : 'false'"
+            aria-controls="bb-megamenu"
+            aria-label="Open menu"
           >
-            <i class="fas fa-user text-xl" />
-          </router-link>
-
-          <!-- Dropdown profilo: burgundy metal -->
-          <div
-            v-if="showDropdown"
-            class="absolute right-0 mt-2 w-72 rounded-xl shadow-2xl overflow-hidden bb-burgundy-panel z-50"
-          >
-            <!-- header utente -->
-            <div class="px-4 py-4 flex items-center gap-3">
-              <img :src="profile.avatar || defaultAvatar" class="h-12 w-12 rounded-full object-cover ring-2 ring-white/10" />
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="font-semibold truncate">{{ profile.username || 'Utente' }}</span>
-                  <!-- badge (PNG) -->
-                  <img
-                    v-if="badgeUrl"
-                    :src="badgeUrl"
-                    alt="badge"
-                    class="h-6 w-6 object-contain select-none"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </div>
-                <div class="text-xs text-gray-300/90">
-                  Livello <span class="font-medium">{{ level }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="h-px bg-white/10"></div>
-
-            <!-- Link -->
-            <ul class="py-2 text-sm">
-              <li>
-                <router-link
-                  to="/CompleteProfile"
-                  class="block px-4 py-2 hover:bg-white/10"
-                  @click="closeDropdown"
-                >
-                  {{ $t('auth.profile') }}
-                </router-link>
-              </li>
-              <li>
-                <button
-                  @click="logout"
-                  class="w-full text-left block px-4 py-2 hover:bg-white/10"
-                >
-                  {{ $t('auth.signOut') }}
-                </button>
-              </li>
-            </ul>
-          </div>
+            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-width="2" d="M4 7h16M4 12h16M10 17h10" />
+            </svg>
+          </button>
         </div>
-
-        <!-- Hamburger mobile -->
-        <button @click="toggleMobileMenu" class="md:hidden p-2 border border-white rounded">
-          <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
       </div>
     </div>
   </nav>
 
-  <!-- Mobile menu -->
-  <transition name="fade">
-    <div v-if="mobileMenuOpen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-md space-y-6 px-4">
-      <router-link
-        v-for="link in links"
-        :key="link.to"
-        :to="link.to"
-        @click="closeMobileMenu"
-        class="text-2xl text-white hover:underline"
+  <!-- spacer -->
+  <div style="height:64px"></div>
+
+  <!-- OVERLAY -->
+  <transition name="bb-fade">
+    <div v-if="menuOpen" id="bb-megamenu" class="fixed inset-0 z-[60] flex" @keydown.esc.prevent.stop="closeMenu">
+      <div class="absolute inset-0 bg-black/90 backdrop-blur-md" @click="closeMenu" />
+
+      <div
+        class="relative mx-auto my-auto w-[min(1080px,92vw)] md:max-h-[88vh] overflow-hidden md:rounded-2xl md:border md:border-white/10 md:bg-[#0a0a0b]
+               h-[100vh] md:h-auto bg-[#0a0a0b] border-0 rounded-none flex flex-col"
+        role="dialog" aria-modal="true"
       >
-        {{ $t(link.labelKey) }}
-      </router-link>
+        <div class="flex-1 overflow-y-auto">
+          <div class="grid grid-cols-1 md:grid-cols-12">
+            <!-- SINISTRA -->
+            <div class="md:col-span-7 p-5 sm:p-7">
+              <div class="flex items-center justify-between mb-2">
+                <h2 class="text-base sm:text-lg font-semibold tracking-wide text-white">{{ t('navigation.menu') }}</h2>
+                <button @click="closeMenu" class="rounded-lg border border-white/15 bg-white/5 px-2 py-1 text-white hover:bg-white/10" aria-label="Close menu">✕</button>
+              </div>
 
-      <!-- Cambio lingua mobile -->
-      <div class="flex space-x-4 mt-4">
-        <button @click="$i18n.locale = 'it'; closeMobileMenu()" class="text-white hover:underline">IT</button>
-        <button @click="$i18n.locale = 'en'; closeMobileMenu()" class="text-white hover:underline">EN</button>
+              <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                <li v-for="item in bigLinks" :key="item.to">
+                  <router-link
+                    :to="item.to"
+                    @click="closeMenu"
+                    class="group block rounded-xl border border-white/10 bg-[#111214] p-4 hover:bg-[#15161a] transition"
+                  >
+                    <div class="flex items-center justify-between">
+                      <span class="text-base font-semibold text-white">{{ item.label }}</span>
+                      <i class="fas fa-arrow-right text-white/40 group-hover:translate-x-1 transition"></i>
+                    </div>
+                    <p class="mt-1 text-sm text-white/70">{{ item.desc }}</p>
+                  </router-link>
+                </li>
+              </ul>
+
+              <div class="mt-5 flex flex-wrap items-center gap-3">
+                <!-- LANG -->
+                <div class="flex items-center gap-2 rounded-lg border border-white/10 bg-[#111214] px-2 py-1">
+                  <span class="text-xs text-white/60">Lang</span>
+                  <button @click="setLang('it')" class="text-xs px-2 py-1 rounded hover:bg-white/10 text-white" :class="locale === 'it' ? 'bg-white/10' : ''">IT</button>
+                  <button @click="setLang('en')" class="text-xs px-2 py-1 rounded hover:bg-white/10 text-white" :class="locale === 'en' ? 'bg-white/10' : ''">EN</button>
+                </div>
+
+                <!-- LOGIN / PROFILO -->
+                <router-link v-if="!isLogged" to="/login" @click="closeMenu" class="text-sm rounded-lg border border-white/10 bg-[#111214] px-3 py-1.5 hover:bg-[#15161a] text-white">
+                  {{ t('auth.signIn') }}
+                </router-link>
+
+                <router-link v-else to="/CompleteProfile" @click="closeMenu" class="flex items-center gap-2 text-sm rounded-lg border border-white/10 bg-[#111214] px-3 py-1.5 hover:bg-[#15161a] text-white">
+                  <img :src="profile.avatar || defaultAvatar" class="h-6 w-6 rounded-full object-cover" alt="">
+                  <span class="truncate max-w-[12ch]">{{ profile.username || t('auth.user') }}</span>
+                  <img v-if="badgeUrl" :src="badgeUrl" class="h-5 w-5" alt="badge" />
+                  <span class="text-white/60">Lv {{ level }}</span>
+                </router-link>
+
+                <button v-if="isLogged" @click="performLogout" class="text-sm rounded-lg border border-white/10 bg-[#111214] px-3 py-1.5 hover:bg-[#15161a] text-white">
+                  {{ t('auth.signOut') }}
+                </button>
+              </div>
+            </div>
+
+            <!-- DESTRA -->
+            <div class="md:col-span-5 relative overflow-hidden bg-gradient-to-b from-white/[0.03] to-transparent">
+              <div class="relative p-6 sm:p-7 h-full flex flex-col">
+                <div class="flex items-center gap-3">
+                  <img src="/logos/marker.webp" class="h-8 w-auto" alt="BB" />
+                  <h3 class="text-base font-semibold text-white">Bitcoin Beer</h3>
+                </div>
+
+                <p class="mt-2 text-sm text-white/80">
+                  {{ t('navigation.tagline') }}
+                </p>
+
+                <!-- CTA Newsletter -->
+                <div class="mt-4">
+                  <router-link
+                    to="/newsletter"
+                    @click="closeMenu"
+                    class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 hover:bg-white/20 transition px-4 py-2 text-sm text-white"
+                  >
+                    <i class="fas fa-envelope"></i>
+                    {{ t('navigation.ctaNewsletter') }}
+                  </router-link>
+                </div>
+
+                <!-- Foto -->
+                <div class="mt-4">
+                  <img
+                    src="https://cdn.bitcoinbeer.events/meetup/DSC01623.JPG"
+                    alt="Meetup"
+                    class="w-full h-36 md:h-40 object-cover rounded-xl border border-white/10"
+                    loading="lazy" decoding="async"
+                  />
+                </div>
+
+                <!-- Azioni -->
+                <div class="mt-4 flex flex-wrap gap-3">
+                  <a href="mailto:hello@bitcoinbeer.events" class="rounded-xl border border-white/10 bg-[#111214] hover:bg-[#15161a] transition px-4 py-2 text-sm text-white">
+                    {{ t('navigation.contactUs') }}
+                  </a>
+                  <router-link to="/proponi-meetup" @click="closeMenu" class="rounded-xl border border-white/10 bg-[#111214] hover:bg-[#15161a] transition px-4 py-2 text-sm text-white">
+                    {{ t('navigation.proposeMeetup') }}
+                  </router-link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div> <!-- /scroll area -->
       </div>
-
-      <button @click="closeMobileMenu" class="mt-4 text-white border border-white rounded px-4 py-2">X</button>
     </div>
   </transition>
 </template>
@@ -139,121 +162,87 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useProfile } from '@/composables/useProfile'
 
-const { t } = useI18n()
+/* i18n reattivo */
+const { t, locale: i18nLocale } = useI18n()
+const locale = ref(i18nLocale.value)
+function setLang(l) {
+  if (!l) return
+  i18nLocale.value = l      // <- cambia davvero la lingua
+  locale.value = l          // <- evidenziazione dei bottoni
+}
+
+/* Router / route */
+const router = useRouter()
+const route = useRoute()
+
+/* Auth/Profile */
 const { profile, defaultAvatar, loadProfile, token } = useProfile()
 const isLogged = computed(() => !!profile.value?.id)
 
-// links
-const links = [
-  { to: '/', labelKey: 'navigation.home' },
-  { to: '/start', labelKey: 'navigation.start' },
-  { to: '/explore', labelKey: 'navigation.explore' },
-  { to: '/all-events', labelKey: 'navigation.calendar' },
-  { to: '/leaderboard', labelKey: 'navigation.leaderboard' },
-  { to: '/newsletter', labelKey: 'navigation.newsletter' }
-]
-
-/* ====== livello + badge ====== */
+/* Tickets -> Level/Badge */
 const API_TICKETS = 'https://api.bitcoinbeer.events/api/user_tickets.php'
 const ticketsCount = ref(0)
-
 async function refreshTicketsCount() {
   if (!token.value) return
   try {
-    const res = await fetch(API_TICKETS, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: token.value })
-    })
+    const res = await fetch(API_TICKETS, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token: token.value }) })
     const json = await res.json()
     if (json?.success) ticketsCount.value = (json.data?.tickets || []).length
-  } catch (e) {
-    // silenzioso
-  }
+  } catch {}
 }
-
 const level = computed(() => Math.floor(ticketsCount.value / 10) + 1)
-
-// Badge per livello corrente (ogni 10 ticket)
-const BADGE_BY_LEVEL = {
-  1: '/assets/badges/lv1.png',
-  2: '/assets/badges/lv2.png',
-  3: '/assets/badges/lv3.png',
-  4: '/assets/badges/lv4.png',
-  5: '/assets/badges/lv5.png',
-  6: '/assets/badges/lv6.png',
-}
+const BADGE_BY_LEVEL = { 1:'/assets/badges/lv1.png', 2:'/assets/badges/lv2.png', 3:'/assets/badges/lv3.png', 4:'/assets/badges/lv4.png', 5:'/assets/badges/lv5.png', 6:'/assets/badges/lv6.png' }
 const badgeUrl = computed(() => BADGE_BY_LEVEL[Math.min(6, Math.max(1, level.value))] || null)
 
-/* ====== dropdown / auth ====== */
-const showDropdown = ref(false)
-function toggleDropdown() {
+/* Navbar shrink */
+const isScrolled = ref(false)
+function onScroll() { isScrolled.value = window.scrollY > 10 }
+
+/* Mega menu */
+const menuOpen = ref(false)
+function openMenu() {
+  menuOpen.value = true
   if (token.value && !profile.value?.id) loadProfile()
   if (token.value && ticketsCount.value === 0) refreshTicketsCount()
-  showDropdown.value = !showDropdown.value
+  document.documentElement.style.overflow = 'hidden'
 }
-function closeDropdown() { showDropdown.value = false }
-
-const router = useRouter()
-function logout() {
+function closeMenu() {
+  menuOpen.value = false
+  document.documentElement.style.overflow = ''
+}
+function performLogout() {
   localStorage.removeItem('user_token')
   token.value = ''
-  showDropdown.value = false
+  closeMenu()
   router.push('/')
 }
 
-/* ====== mobile menu ====== */
-const mobileMenuOpen = ref(false)
-function toggleMobileMenu() { mobileMenuOpen.value = !mobileMenuOpen.value }
-function closeMobileMenu() { mobileMenuOpen.value = false }
+/* Link sinistra (reattivi alla lingua) */
+const bigLinks = computed(() => ([
+  { to: '/',            label: t('navigation.home'),       desc: t('navigation.homeDesc') },
+  { to: '/start',       label: t('navigation.start'),      desc: t('navigation.startDesc') },
+  { to: '/explore',     label: t('navigation.explore'),    desc: t('navigation.exploreDesc') },
+  { to: '/all-events',  label: t('navigation.calendar'),   desc: t('navigation.calendarDesc') },
+  { to: '/leaderboard', label: t('navigation.leaderboard'),desc: t('navigation.leaderboardDesc') },
+  { to: '/gallery',     label: t('navigation.gallery'),    desc: t('navigation.galleryDesc') },
+]))
 
-/* ====== helpers ====== */
-const route = useRoute()
-function isActive(path) { return route.path === path }
-
-/* ====== navbar shrink ====== */
-const isScrolled = ref(false)
-function onScroll() { isScrolled.value = window.scrollY > 10 }
+/* Lifecycle */
 onMounted(() => {
-  window.addEventListener('scroll', onScroll)
-  if (isLogged.value) {
-    loadProfile()
-    refreshTicketsCount()
-  }
-  // Soft refresh: quando torni alla tab o la pagina torna visibile
+  window.addEventListener('scroll', onScroll, { passive: true })
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && menuOpen.value) closeMenu() })
+  if (isLogged.value) { loadProfile(); refreshTicketsCount() }
   window.addEventListener('focus', refreshTicketsCount)
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') refreshTicketsCount()
-  })
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshTicketsCount() })
 })
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll)
   window.removeEventListener('focus', refreshTicketsCount)
-  document.removeEventListener('visibilitychange', () => {})
 })
-
-// Soft refresh: al cambio rotta (es. ritorno da pagamento su una route del sito)
-watch(() => route.fullPath, () => {
-  if (isLogged.value) refreshTicketsCount()
-})
+watch(() => route.fullPath, () => { if (menuOpen.value) closeMenu(); if (isLogged.value) refreshTicketsCount() })
 </script>
 
 <style scoped>
-/* transizione overlay mobile */
-.fade-enter-active,
-.fade-leave-active { transition: opacity 0.3s; }
-.fade-enter-from,
-.fade-leave-to { opacity: 0; }
-
-/* pannello burgundy “metallico” */
-.bb-burgundy-panel {
-  color: #f5f5f7;
-  background:
-    radial-gradient(120% 120% at 10% 0%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 60%),
-    linear-gradient(135deg, #300016 0%, #5a0026 40%, #0b0b0d 100%);
-  border: 1px solid rgba(255,255,255,0.08);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.06),
-    0 10px 30px rgba(0,0,0,0.45);
-}
+.bb-fade-enter-active, .bb-fade-leave-active { transition: opacity .18s ease; }
+.bb-fade-enter-from, .bb-fade-leave-to { opacity: 0; }
 </style>
